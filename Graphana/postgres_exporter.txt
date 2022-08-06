@@ -1,0 +1,84 @@
+References:
+https://fatdba.com/2021/03/24/how-to-monitor-your-postgresql-database-using-grafana-prometheus-postgres_exporter/
+https://github.com/prometheus-community/postgres_exporter
+https://github.com/prometheus-community/postgres_exporter.git
+https://youtu.be/d3vfBStq3ik
+===========================================================
+
+1. Lets create few required directories first.
+
+mkdir /opt/postgres_exporter
+cd /opt/postgres_exporter
+
+2. Download and untar the file.
+
+wget https://github.com/prometheus-community/postgres_exporter/releases/download/v0.10.1/postgres_exporter-0.10.1.linux-amd64.tar.gz
+tar -xzvf postgres_exporter-0.10.1.linux-amd64.tar.gz
+cd postgres_exporter-0.10.1.linux-amd64
+
+3. Copy core file 'postgres_exporter' file to /usr/local/bin directory
+
+cp postgres_exporter /usr/local/bin
+
+4. Next, lets create the configuration file for postres_exporter
+
+cd /opt/postgres_exporter
+sudo vi postgres_exporter.env
+
+DATA_SOURCE_NAME="postgresql://postgres:123456@192.168.0.101:5432?sslmode=disable" 
+OR
+DATA_SOURCE_NAME="postgresql://postgres:123456@192.168.0.101:5432/pacsdb?sslmode=disable" 
+
+
+5. Next, create the service for postgres_exporter
+
+vi /etc/systemd/system/postgres_exporter.service
+
+put below lines to the service file
+
+[Unit]
+Description=Prometheus exporter for Postgresql
+Wants=network-online.target
+After=network-online.target
+[Service]
+User=postgres
+Group=postgres
+WorkingDirectory=/opt/postgres_exporter
+EnvironmentFile=/opt/postgres_exporter/postgres_exporter.env
+ExecStart=/usr/local/bin/postgres_exporter --web.listen-address=192.168.0.101:9187 --web.telemetry-path=/metrics
+Restart=always
+[Install]
+WantedBy=multi-user.target
+
+6. Next enable service and check status
+
+sudo systemctl daemon-reload
+sudo systemctl start postgres_exporter
+sudo systemctl enable postgres_exporter
+
+
+7. Steps to perform on Prometheus Server
+systemctl stop prometheus
+vi /etc/prometheus/prometheus.yml
+- job_name: 'postgres'
+  static_configs:
+  - targets: ['192.168.0.101:9187']
+
+
+systemctl start prometheus
+systemctl status prometheus
+
+
+Variable Name:  DATA_SOURCE_NAME    
+Variable Values : postgresql://postgres_exporter:postgres_exporter@192.168.0.95:5432/postgres?sslmode=disable
+
+
+create user postgres_exporter with password 'postgres_exporter';
+ALTER USER postgres_exporter SET SEARCH_PATH TO postgres_exporter,pg_catalog;
+GRANT CONNECT ON DATABASE postgres TO postgres_exporter;
+GRANT pg_monitor to postgres_exporter;
+
+
+
+http://192.168.0.101:9090/targets
+
