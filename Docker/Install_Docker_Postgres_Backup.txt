@@ -1,0 +1,166 @@
+Reference : docs.docker.com/engine/install/centos/
+		  : hackernoon.com/how-to-install-postgresql-with-docker-quickly-ki7g363m
+		  : dev.to/steadylearner/how-to-set-up-postgresql-and-pgadmin-with-docker-51h
+CheatSheet: https://gist.github.com/apolloclark/ea5466d5929e63043dcf
+
+How to Install Docker :
+===============================================================
+Step 1:
+#Downloads the script from get.docker.com and runs it to install the latest stable release of Docker on Linux:
+[foyez@localhost ~]$ curl -fsSL https://test.docker.com -o test-docker.sh
+[foyez@localhost ~]$ sudo sh test-docker.sh
+
+Step 2:
+# Add your user to the docker group.
+[foyez@localhost ~]$  sudo usermod -aG docker foyez
+
+Step 3:
+[foyez@localhost ~]$  sudo service docker start
+Configure Docker to start on boot:
+[foyez@localhost ~]$ sudo systemctl enable docker.service
+[foyez@localhost ~]$ sudo systemctl enable containerd.service
+
+Install Postgresql inside Docker :
+=================================================================
+Step 1:
+[foyez@localhost ~]$ docker volume create postgresqldata 
+[foyez@localhost ~]$ docker volume ls
+[root@localhost docker]# docker volume inspect postgresqldata
+[foyez@localhost ~]$ docker run -v postgresqldata:/var/lib/postgresql/data -e POSTGRES_USER=pacs -e POSTGRES_PASSWORD=pacs --name db_container -p 3254:5432 -d postgres
+Then, use $docker ps -a to see it is saved ok.
+foyez@localhost ~]$ docker ps –a
+
+OR
+Step 1:
+[foyez@localhost ~]$ docker run --name db_container -e POSTGRES_USER=pacs -e POSTGRES_PASSWORD=pacs -p 3254:5432 -v /postgresql/data:/var/lib/postgresql/data -d postgres
+[foyez@localhost ~]$ docker ps -a
+[foyez@localhost ~]$ docker inspect -f '{{ json .Mounts }}' db_container | python -m json.tool
+
+Step 2:
+[foyez@localhost ~]$ docker exec -it db_container /bin/bash
+root@a18a9c963a94:/# $ psql -h localhost -U pacs
+or
+[foyez@localhost ~]$ docker exec -it db_container psql -U pacs postgres
+
+postgres=# \c
+You are now connected to database "postgres" as user "pacs".
+pacs=# \c pacsdb
+You are now connected to database "pacsdb" as user "pacs".
+postgres=# \q   = > [For exit]
+
+[foyez@localhost ~]$ ps -ef | grep postgres
+		
+
+				
+Auto Backup Configure:
+===========================================================================		
+[foyez@localhost ~]$ docker exec -it db_container bash
+root@79d19561d832:/# mkdir -p /postgresdb/postgres_backups
+root@79d19561d832:/# vim daily_backups_pg.sh
+root@5d5571461c6e:/postgresdb# chmod 755 daily_backups_pg.sh
+
+
+
+[foyez@localhost ~]$ sudo su -
+[root@localhost ~]$ crontab -l
+30 2 * * * /postgres_db/postgres_backup_copy/postgres_cp.sh
+30 1 * * * docker exec db_container bash -c '/postgresdb/daily_backups_pg.sh'
+30 13 * * * docker exec db_container bash -c '/postgresdb/daily_backups_pg.sh'
+
+
+root@79d19561d832:/# vim daily_backups_pg.sh
+==========================================================
+#!/bin/bash
+#
+# Backup a Postgresql database into a daily file.
+#
+
+BACKUP_DIR=/postgresdb/postgres_backups
+DAYS_TO_KEEP=15
+FILE_SUFFIX=_docker_pg_backup.sql
+USER=pacs
+
+
+# Remove old backups
+find $BACKUP_DIR -maxdepth 1 -mtime +$DAYS_TO_KEEP -name "*${FILE_SUFFIX}.gz" -exec rm -rf '{}' ';'
+
+
+######### Database pacs Backup #################
+DATABASE=pacs
+FILE=`date +"%d-%m-%Y-%H%M"`_${DATABASE}${FILE_SUFFIX}
+OUTPUT_FILE=${BACKUP_DIR}/${FILE}
+# do the database backup (dump)
+# use this command for a database server on localhost. add other options if need be.
+PGPASSWORD="pacs" pg_dump -U ${USER} ${DATABASE} -F p -f ${OUTPUT_FILE}
+# gzip the postgres database dump file
+gzip $OUTPUT_FILE
+
+# show the user the result
+echo "${OUTPUT_FILE}.gz was created:"
+ls -l ${OUTPUT_FILE}.gz
+
+
+	
+[foyez@localhost ~]$ sudo mkdir -p /postgresdb/postgres_backup_copy	
+[foyez@localhost ~]$ cd /postgres_db/postgres_backup_copy
+
+[foyez@localhost postgres_backup_copy]$ vim postgres_cp.sh
+========================================================================
+docker cp db_container:/postgresdb/postgres_backups/ /postgres_db/postgres_backup_copy
+find /postgres_db/postgres_backup_copy/postgres_backups/*.gz -mtime +15 -exec rm -f {} \;
+		
+		
+
+
+Manual Backup Inside Docker:
+===============================================================
+Backup:
+root@5d5571461c6e:~# pg_dump -U pacs pacsdb -F p -f /postgresdb/postgres_backups/test.sql
+
+Restore:
+root@5d5571461c6e:# psql -U pacs -d pacsdb < /postgresdb/postgres_backups/06-03-2022-0815_pacs_docker_pg_backup.sql
+		
+
+
+		
+
+Install Vim Inside docker container:
+-----------------------------------------
+[foyez@localhost ~]$ docker exec -it db_container bash
+root@79d19561d832: apt-get update
+root@79d19561d832: apt-get install vim -y	
+
+or 
+
+root@5d5571461c6e:# apt-get install vim nano
+	
+	
+
+	
+		
+Remove Docker Container & Volume:	
+---------------------------------------------------------------------
+[foyez@localhost ~]$ docker ps -a	
+[foyez@localhost ~]$ docker container stop db_container
+[foyez@localhost ~]$ docker container remove db_container	
+
+[foyez@localhost ~]$ docker volume ls
+[foyez@localhost ~]$ docker volume  rm postgresqldata
+
+
+
+
+Error in docker :
+---------------------------------------------------------------------------------------
+Server: ERROR: Got permission denied while trying to connect to the Docker daemon socket
+[foyez@localhost ~]$ sudo newgroup docker
+[foyez@localhost ~]$ sudo chmod 666 /var/run/docker.sock
+[foyez@localhost ~]$ sudo usermod -aG docker foyez
+
+
+Docker Networking Disabled: WARNING: IPv4 forwarding is disabled. Networking will not work:
+[root@localhost ~]$ vim /etc/sysctl.conf
+Add the following 
+     net.ipv4.ip_forward=1
+[root@localhost ~]$ systemctl restart network
+[root@localhost ~]$ sysctl net.ipv4.ip_forward
