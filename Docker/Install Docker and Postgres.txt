@@ -1,0 +1,255 @@
+Reference : docs.docker.com/engine/install/centos/
+		  : dev.to/steadylearner/how-to-set-up-postgresql-and-pgadmin-with-docker-51h
+
+
+How to Install Docker :
+#Downloads the script from get.docker.com and runs it to install the latest stable release of Docker on Linux:
+[foyez@localhost ~]$ curl -fsSL https://test.docker.com -o test-docker.sh
+[foyez@localhost ~]$ sudo sh test-docker.sh
+
+------------------------------------
+Manage Docker as a non-root user
+The Docker daemon binds to a Unix socket instead of a TCP port. By default that Unix socket is owned by the user root and
+other users can only access it using sudo. The Docker daemon always runs as the root user.
+
+If you don’t want to preface the docker command with sudo, create a Unix group called docker and add users to it. When the 
+Docker daemon starts, it creates a Unix socket accessible by members of the docker group.
+------------------------------------
+To create the docker group and add your user:
+Create the docker group:
+
+[foyez@localhost ~]$  sudo groupadd docker
+
+# Add your user to the docker group.
+[foyez@localhost ~]$  sudo usermod -aG docker $USER
+
+If testing on a virtual machine, it may be necessary to restart the virtual machine for changes to take effect.
+On a desktop Linux environment such as X Windows, log out of your session completely and then log back in.
+On Linux, you can also run the following command to activate the changes to groups:
+
+
+Error - > Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?
+[foyez@localhost ~]$  sudo service docker start
+
+ 
+Configure Docker to start on boot:
+
+[foyez@localhost ~]$ sudo systemctl enable docker.service
+[foyez@localhost ~]$ sudo systemctl enable containerd.service
+ 
+Install Postgresql with Docker :
+=================================================================
+[foyez@localhost ~]$ docker volume create postgresqldata 
+[foyez@localhost ~]$ docker volume ls
+[root@localhost docker]# docker volume inspect postgresqldata
+[foyez@localhost ~]$ docker run -d -v postgresqldata:/var/lib/postgresql/data -e POSTGRES_USER=pacs -e --name postgres -p 3254:5432 postgres
+
+Then, use $docker ps -a to see it is saved ok.
+foyez@localhost ~]$ docker ps -a
+
+Use $docker exec -it postgres /bin/bash to use the console of the Docker image and then 
+$psql -h localhost -U postgres to use psql commands in your console.
+foyez@localhost ~]$ docker exec -it postgres /bin/bash
+root@a18a9c963a94:/# $ psql -h localhost -U postgres
+
+or
+foyez@localhost ~]$ docker exec -it postgres psql -U postgres postgres
+														|		 |
+													   user   	db
+													   
+
+
+													   
+Install Pgadmin with Docker :
+===========================================													   
+foyez@localhost ~]$ docker run --name pgadmin -e "PGADMIN_DEFAULT_EMAIL=name@example.com" -e "PGADMIN_DEFAULT_PASSWORD=admin" -p 5050:80 -d dpage/pgadmin4 
+ 
+ 
+#Link them with Docker network and set up Pgadmin
+To make Pgadmin installed with Docker work along with Postgesql, we should link them with the Docker network command.
+We will first create pgnetwork for that purpose with the command below:
+
+foyez@localhost ~]$ docker network create --driver bridge pgnetwork
+
+Then, you can see it was created with $docker network ls command.
+ 
+#You can link Pgadmin and Postgresql to it with these. 
+ 
+foyez@localhost ~]$ $docker network connect pgnetwork pgadmin
+foyez@localhost ~]$ $docker network connect pgnetwork postgres
+ 
+You can verify they were connected with pgnetwork with docker network inspect pgnetwork command. 
+foyez@localhost ~]$ docker network inspect pgnetwork
+Link will be  => 192.168.0.101:5050 
+ 
+ 
+#You can stop them after you test them not to use your resources with this.
+foyez@localhost ~]$ docker stop pgadmin postgtres
+ 
+ 
+Docker start:
+========================================================
+[foyez@localhost ~]$ docker ps –a
+[foyez@localhost ~]$ docker container start 529f04ffd76d
+[foyez@localhost ~]$ docker container start 645ac0dcecdf
+[foyez@localhost ~]$ docker exec -it postgres psql -U postgres postgres
+
+ 
+Taking backup into docker: (Backup your databases)
+-----------------------------------------------------------
+[foyez@localhost ~]$ docker exec -it postgres /bin/bash
+[root@a18a9c963a94:~# mkdir -p /postgres/bkp/
+[root@a18a9c963a94:~# pg_dump -U postgres postgres -v  -F p -f /postgres/bkp/testbkp.sql
+#cat your_dump.sql | docker exec -i your-db-container psql -U postgres
+[foyez@localhost ~]$ cat /data/testbkp.sql | docker exec -i postgres psql -U postgres
+
+ 
+
+ 
+Reference : simplebackups.com/blog/docker-postgres-backup-restore-guide-with-examples/
+Back up a Docker PostgreSQL database:
+==============================================================
+[root@localhost /]# docker exec -t postgres pg_dumpall -c -U postgres -v > /data/dump_`date +%d-%m-%Y"_"%H_%M_%S`.sql
+Restore your databases:
+cat your_dump.sql | docker exec -i your-db-container psql -U postgres
+[root@localhost data]# cat /data/bkp_1.sql | docker exec -i postgres psql -U postgres
+#That's the postgres way to do it
+
+Or
+
+Back up a Docker PostgreSQL database:
+# docker exec -i postgres /usr/bin/pg_dump \ -U <postgresql_user> <postgresql_database> > postgres-backup.sql 
+
+[root@localhost /]# docker exec -i postgres /usr/bin/pg_dump  -U postgres postgres -v > /data/postgres-backup.sql 
+
+Note: if you may set the database host by adding: -h <postgresql_host> to the dump command.
+
+#Back up all Docker PostgreSQL databases:
+
+#docker exec -i postgres /usr/bin/pg_dumpall \ -U <postgresql_user> > postgres-backup.sql
+
+[root@localhost bin]# docker exec -i postgres /usr/bin/pg_dumpall  -U postgres -v > /data/postgres-backup.sql
+
+#Back up and compress a Docker PostgreSQL database with gzip  :
+
+#docker exec -i postgres /usr/bin/pg_dump -U <postgresql_user> <postgresql_database> | gzip -9 > postgres-backup.sql.gz
+[root@localhost data]# docker exec -i postgres /usr/bin/pg_dump -U postgres  postgres -v | gzip -9 > postgres-backup.sql.gz 
+
+#Example when using a PostgreSQL password
+#docker exec -i -e PGPASSWORD=<postgresql_password> postgres /usr/bin/pg_dump -U <postgresql_user> <postgresql_database> | gzip -9 > postgres-backup.sql.gz 
+ 
+ 
+ 
+How to Restore Data Dump Using pg_restore:
+======================================================
+Step 1: Find the name and id of the Docker container hosting the Postgres instance
+[root@localhost data]# docker ps
+
+Step 2: Find the volumes available in the Docker container:
+[root@localhost data]# docker inspect -f '{{ json .Mounts }}' <container_id> | python -m json.tool
+
+Step 3: Copy dump into one of the volumes
+#Pick a volume and copy your dump in. Run docker cp </path/to/dump/in/host> <container_name>:<path_to_volume>
+[root@localhost data]# docker cp /data/dump_23-02-2022_16_03_50.sql postgres:/data/db
+
+Step 4: Get the database owner to run pg_restore command
+#docker exec <container_name> <some_command>
+[root@localhost data]# docker exec postgres  psql -U postgres -l
+
+Step 5:
+[root@localhost data]# docker exec postgres pg_restore -U postgres -d test -v  /data/db/dump_23-02-2022_16_03_50.dmp
+
+ 
+Uninstall Docker Engine
+===============================================================
+Uninstall the Docker Engine, CLI, and Containerd packages:
+
+ sudo yum remove docker-ce docker-ce-cli containerd.io
+Images, containers, volumes, or customized configuration files on your host are not automatically removed. To delete all images, containers, and volumes:
+
+ sudo rm -rf /var/lib/docker
+ sudo rm -rf /var/lib/containerd
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ In PostgreSQL, you can use the \connect meta-command of the client tool psql:
+
+\connect DBNAME
+or in short:
+
+\c DBNAME
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+hackernoon.com/how-to-install-postgresql-with-docker-quickly-ki7g363m
+ --------------------------------------------------------------------------
+ 
+docker run --name postgresqldb -e POSTGRES_USER=myusername -e POSTGRES_PASSWORD=mypassword -p 5432:5432 -v /data:/var/lib/postgresql/data -d postgres
+ 
+ 
+--name : I set a name for the container.
+-e POSTGRES_USER : I set the database username.
+-e POSTGRES_PASSWORD : I set the database password.
+-p : 5432 port is used by default. But it can be changed this according to preference. Local port and container port 
+can be set separately. The first port is for local, and the second is for container.
+-v : This parameter is related to the Docker Volume feature. This is important for not 
+losing data. With this feature, I synchronize with the folder containing the data in the database and a folder 
+of my choice on the computer or server. When the container is closed or restarted for any reason, it can be easily started with the same data. 
+The first path can be any folder you prefer. I set it to /data as an example. Please do not change the second path because data is in this path by default.
+-d : I will run detached mode(background mode). If you run it without using it, the docker container will be stopped when 
+you press the Ctrl + C combination or close the terminal screen. This is undesirable because the container should be running in the background.
+postgres : Image name.
+
+
+
+
+[foyez@localhost ~]$ docker exec -it postgres /bin/bash
+root@a18a9c963a94:/# cat /var/lib/postgresql/data/postgresql.conf
+root@a18a9c963a94:/# cat /var/lib/postgresql/data/postgresql.conf | grep -i listen_addresses
+listen_addresses = '*'
+root@a18a9c963a94:/#
+
+
+
+
+Install Vim Inside docker container:
+-----------------------------------------
+[foyez@localhost ~]$ docker exec -it postgres bash
+root@1d882932f452: cd /var/lib/postgresql/data
+root@1d882932f452: /var/lib/postgresql/data# cd /var/lib/postgresql/data/
+root@1d882932f452: apt-get update
+root@1d882932f452: apt-get install vim -y
+
+
+
+
+How to enable logging:
+----------------------------
+References: 2ndquadrant.com/en/blog/how-to-get-the-best-out-of-postgresql-logs/
+
+
+
+
+
+
+
+
+docker run -d -v postgresqldata/var/lib/postgresql/data –e POSTGRES_PASSWORD=password --name db_container -p 3254:5432 postgres
+ 
