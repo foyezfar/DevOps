@@ -1,0 +1,83 @@
+Creating two network namespaces using 'red' and 'green' names, connect them with a bridge, and check connectivity.
+We have to successfully ping Google's public IP from those network namespaces.
+
+
+#Create Network Namespaces:
+
+sudo ip netns add green
+sudo ip netns add red
+
+#Create a Bridge Interface:
+
+sudo ip link add v-net-0 type bridge
+
+ 
+#Assign IP Address to Bridge Interface:
+
+sudo ip addr add 192.168.10.50/24 dev v-net-0
+sudo ip link set dev v-net-0 up
+
+#Connecting Network Interfaces to Bridge
+
+sudo ip link add veth-green type veth peer name veth-green-br
+sudo ip link add veth-red type veth peer name veth-red-br
+
+ 
+#Move veth Pairs to Respective Namespaces:
+
+sudo ip link set veth-green netns green
+sudo ip link set veth-red netns red
+
+ 
+#Connect veth Pairs to Bridge:
+
+sudo ip link set veth-green-br master v-net-0
+sudo ip link set veth-red-br master v-net-0
+
+ 
+
+#Configuring IP Addresses Inside Namespaces
+
+sudo ip netns exec green ip addr add 192.168.10.100/24 dev veth-green
+sudo ip netns exec red ip addr add 192.168.10.200/24 dev veth-red
+
+ 
+
+#Enable Interfaces Inside Namespaces:
+
+sudo ip netns exec green ip link set veth-green up
+sudo ip netns exec red ip link set veth-red up
+
+ 
+
+#Configuring Routing and Enabling IP Forwarding
+
+sudo ip netns exec red ip route add default via 192.168.10.50
+sudo ip netns exec green ip route add default via 192.168.10.50
+
+ 
+
+#Enable IP Forwarding on Host:
+
+sudo sysctl net.ipv4.ip_forward=1
+
+ 
+
+#Enabling NAT and Testing Connectivity
+
+Enable NAT on Host Machine:
+We set up NAT (Network Address Translation) on the host to translate internal IP addresses to the host's external IP address.
+
+sudo iptables -t nat -A POSTROUTING -s 192.168.10.0/24 -j MASQUERADE
+
+ 
+
+#Test Connectivity:
+
+Finally, we test connectivity from each namespace to an external IP address, such as Google's public DNS server (8.8.8.8).
+
+sudo ip netns exec green ping -c 1 8.8.8.8
+sudo ip netns exec red ping -c 1 8.8.8.8
+
+Blog link: 
+https://lazyninjadba.blogspot.com/2024/03/creating-two-network-namespaces-using.html

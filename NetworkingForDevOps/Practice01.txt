@@ -1,0 +1,46 @@
+Task 01: Create two Namespaces and connect them using veth (vm)
+
+#Create Two Network Namespaces:
+sudo ip netns add ns1
+sudo ip netns add ns2
+
+#list the created network namespaces:
+sudo ip netns list
+
+#To remove a network namespace in Linux:
+sudo ip netns delete ns1
+
+#Create a veth Pair:
+sudo ip link add veth1 type veth peer name veth2
+
+#To see the list of veth pairs on a Linux system
+ip link show type veth
+
+#To delete a veth pair on a Linux system
+sudo ip link delete veth1
+
+#Move Each End of the veth Pair to Respective Namespace:
+sudo ip link set veth1 netns ns1
+sudo ip link set veth2 netns ns2
+
+#Configure IP Addresses within Each Namespace:
+sudo ip netns exec ns1 ip addr add 192.168.1.1/24 dev veth1
+
+#By default, network interfaces of created netns are down, even loop interfaces. make them up.
+sudo ip netns exec ns1 ip link set veth1 up
+
+sudo ip netns exec ns2 ip addr add 192.168.1.2/24 dev veth2
+sudo ip netns exec ns2 ip link set veth2 up
+
+Now, we have two network namespaces (ns1 and ns2) connected through a veth pair (veth1 and veth2).
+Each namespace has its own IP address within the 192.168.1.0/24 subnet.
+
+#This command shows information about the network interfaces present within the specified namespace.
+sudo ip netns exec ns1 ip link
+sudo ip netns exec ns2 ip link
+	ip netns exec ns2: Execute the command within the network namespace named "ns1"
+	ip link: Display information about network interfaces.
+
+#We can test connectivity within the namespaces:
+sudo ip netns exec ns1 ping -c 2 192.168.1.2
+sudo ip netns exec ns2 ping -c 2 192.168.1.1

@@ -1,0 +1,41 @@
+Task 02: Create two Namespaces and connect them using Linux bridge (vm/web)
+
+#Create network namespaces:
+sudo ip netns add green
+sudo ip netns add red
+
+#Create a Linux bridge:
+sudo ip link add v-net-0 type bridge
+
+#Assign an IP address to the bridge interface:
+sudo ip addr add 192.168.10.50/24 dev v-net-0
+sudo ip link set dev v-net-0 up
+
+#Create virtual Ethernet pairs:
+sudo ip link add veth-green type veth peer name veth-green-br
+sudo ip link add veth-red type veth peer name veth-red-br
+
+#Move each end of veth cable to a namespace:
+sudo ip link set veth-green netns green
+sudo ip link set veth-red netns red
+
+#Add the other end of the virtual interfaces to the bridge:
+sudo ip link set veth-green-br master v-net-0
+sudo ip link set veth-red-br master v-net-0
+
+#Assign IP addresses to the virtual interfaces
+sudo ip netns exec green ip addr add 192.168.10.100/24 dev veth-green
+sudo ip netns exec red ip addr add 192.168.10.200/24 dev veth-red
+
+#Set the namespace interfaces up:
+sudo ip netns exec green ip link set veth-green up
+sudo ip netns exec red ip link set veth-red up
+
+#Set the bridge interfaces up:
+sudo ip link set dev veth-green-br up
+sudo ip link set dev veth-red-br up
+
+#We can test connectivity within the namespaces:
+sudo ip netns exec green ping -c 1 192.168.10.200
+sudo ip netns exec red ping -c 1 192.168.10.100
+
