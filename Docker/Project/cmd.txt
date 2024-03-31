@@ -1,0 +1,20 @@
+python -m venv env
+
+#Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
+ .\env\Scripts\Activate
+ 
+pip install fastapi uvicorn
+
+#pip install fastapi sqlalchemy psycopg2
+
+uvicorn main:app --reload --port=8000 --host=0.0.0.0
+
+
+pip freeze > requirements.txt
+deactivate
+
+docker compose up --build
+docker compose up
+
+Note: [#extra if any error]
